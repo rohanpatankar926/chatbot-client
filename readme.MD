@@ -59,3 +59,6 @@ Content-Type: application/json
 {
   "query": "your query"
 }
+
+### running the code
+`uvicorn app:app`
