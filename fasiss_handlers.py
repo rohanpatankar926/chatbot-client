@@ -1,4 +1,4 @@
-from langchain.vectorstores import Chroma
+from langchain.vectorstores import FAISS 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.llms import OpenAI
 from langchain.chains import RetrievalQA
@@ -9,7 +9,7 @@ import hashlib
 load_dotenv()
 from langchain.document_loaders import PDFMinerLoader
 from utils import config_loader
-from utils import tiktoken_len
+from langchain.chains.question_answering import load_qa_chain
 
 class Document:
     def __init__(self, page_content, metadata):
@@ -32,7 +32,7 @@ def pdf_to_json_and_insert(filepath):
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200,
-            length_function=tiktoken_len,
+            length_function = len,
             separators=["\n\n", "\n", " ", ""],
 
         )
@@ -47,34 +47,25 @@ def pdf_to_json_and_insert(filepath):
                 documents.append(
                     doc
                 )
-        return documents
+        embedding = openai_embedding()
+        global knowledge_base
+        knowledge_base = FAISS.from_documents(documents=documents, 
+                                    embedding=embedding)
+        return knowledge_base
 
 def openai_embedding():
     model_name = config_loader["openai_embedding_model"]
     embed = OpenAIEmbeddings(
         model=model_name,
-        openai_api_key="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",
+        openai_api_key="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",
     )
     return embed
 
-def upload_to_chroma(docs):
-    persist_directory = 'db'
-    embedding = openai_embedding()
-    global vectordb
-    vectordb = Chroma.from_documents(documents=docs, 
-                                    embedding=embedding,
-                                 persist_directory=persist_directory)
-    vectordb.persist()
-    return vectordb
 
 
-def retriever_chroma(query):
-    vectordb = Chroma(persist_directory="db", 
-                    embedding_function=openai_embedding())
-    retriever = vectordb.as_retriever(search_kwargs={"k": 10})
-    docs = retriever.get_relevant_documents(query)
-    qa_chain = RetrievalQA.from_chain_type(llm=OpenAI(openai_api_key="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"), 
-                                    chain_type="stuff", 
-                                    retriever=retriever, 
-                                    return_source_documents=True)
-    return qa_chain(query)
+
+def retriever_faiss(query):
+    retrieve=knowledge_base.similarity_search(query=query)
+    llm = OpenAI(openai_api_key="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")
+    chain = load_qa_chain(llm, chain_type='map_rerank')
+    return chain.run(input_documents=retrieve, question=query)

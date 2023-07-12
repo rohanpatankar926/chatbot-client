@@ -6,10 +6,16 @@ import uvicorn
 from typing import List
 from dotenv import load_dotenv
 load_dotenv()
-from chroma_handlers import *
-
+from fasiss_handlers import *
+from fastapi.middleware.cors import CORSMiddleware
 app=FastAPI()
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 @app.post("/normal_upload")
 async def upload_file(request: Request, files: List[UploadFile] = File(...)):
     try:
@@ -21,10 +27,8 @@ async def upload_file(request: Request, files: List[UploadFile] = File(...)):
                     filepath = filename
                     with open(filepath, "wb") as file:
                         file.write(content)
-                    context=pdf_to_json_and_insert(filepath=file.name)
-                    print(context)
-                    retriver_docs=upload_to_chroma(context)
-                    print(retriver_docs)
+                    base=pdf_to_json_and_insert(filepath=file.name)
+                    print(base)
                     if os.path.exists(file.name):
                         os.remove(file.name)
                 else:
@@ -44,7 +48,7 @@ async def upload_file(request: Request, files: List[UploadFile] = File(...)):
 async def predict(
     request: Request, query: str):
     try:
-        response=retriever_chroma(query=query)
+        response=retriever_faiss(query=query)
         return {"status":True,"response":response}
     except Exception as e:
         return{"status":False,"reason":str(e)}
